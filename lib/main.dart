@@ -117,6 +117,37 @@ class _MyHomePageState extends State<MyHomePage> {
       transactions.add(transaction);
       if (fromCategoryPage) {
         _selectedIndex = 2; // Transactions tab
+        // Show success dialog after adding expense
+        Future.delayed(Duration.zero, () {
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) {
+              return AlertDialog(
+                title: Text('Success'),
+                content: Text('Expense added successfully!'),
+                actions: [
+                  TextButton(
+                    child: Text('Cancel'),
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                    },
+                  ),
+                  TextButton(
+                    child: Text('OK'),
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                      // Go to add new expense (Home tab)
+                      setState(() {
+                        _selectedIndex = 0;
+                      });
+                    },
+                  ),
+                ],
+              );
+            },
+          );
+        });
       }
     });
   }
@@ -202,9 +233,35 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   Widget _buildSpendingTab() {
+    // Date filter options
+    final List<String> dateFilters = ['All', 'Today', 'This Month', 'Custom'];
+    String selectedFilter = 'All';
+    DateTime? customStart;
+    DateTime? customEnd;
+
+    // Filter transactions by selected date range
+    List<Map<String, dynamic>> filteredTx = transactions.where((tx) {
+      DateTime txDate = _parseDate(tx['date']);
+      if (selectedFilter == 'Today') {
+        DateTime now = DateTime.now();
+        return txDate.year == now.year &&
+            txDate.month == now.month &&
+            txDate.day == now.day;
+      } else if (selectedFilter == 'This Month') {
+        DateTime now = DateTime.now();
+        return txDate.year == now.year && txDate.month == now.month;
+      } else if (selectedFilter == 'Custom' &&
+          customStart != null &&
+          customEnd != null) {
+        return txDate.isAfter(customStart!.subtract(Duration(days: 1))) &&
+            txDate.isBefore(customEnd!.add(Duration(days: 1)));
+      }
+      return true;
+    }).toList();
+
     // Calculate total spent per category
     Map<String, double> categoryTotals = {};
-    for (var tx in transactions) {
+    for (var tx in filteredTx) {
       final cat = tx['category'] as String? ?? '';
       final amt = tx['amount'] as double? ?? 0.0;
       categoryTotals[cat] = (categoryTotals[cat] ?? 0) + amt;
@@ -244,7 +301,7 @@ class _MyHomePageState extends State<MyHomePage> {
     });
 
     return SafeArea(
-      child: Padding(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -252,6 +309,56 @@ class _MyHomePageState extends State<MyHomePage> {
             Text(
               'Spending Summary',
               style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+            ),
+            SizedBox(height: 12),
+            Row(
+              children: [
+                Text('Filter: ', style: TextStyle(fontSize: 16)),
+                SizedBox(width: 8),
+                DropdownButton<String>(
+                  value: selectedFilter,
+                  items: dateFilters
+                      .map((f) => DropdownMenuItem(value: f, child: Text(f)))
+                      .toList(),
+                  onChanged: (val) {
+                    if (val == null) return;
+                    setState(() {
+                      selectedFilter = val;
+                      if (val != 'Custom') {
+                        customStart = null;
+                        customEnd = null;
+                      }
+                    });
+                    if (val == 'Custom') {
+                      showDateRangePicker(
+                        context: context,
+                        firstDate: DateTime(2000),
+                        lastDate: DateTime(2100),
+                      ).then((range) {
+                        if (range != null) {
+                          setState(() {
+                            customStart = range.start;
+                            customEnd = range.end;
+                          });
+                        }
+                      });
+                    }
+                  },
+                ),
+                if (selectedFilter == 'Custom' &&
+                    customStart != null &&
+                    customEnd != null)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 12.0),
+                    child: Text(
+                      '${customStart != null ? customStart!.toLocal().toString().split(' ')[0] : ''} - ${customEnd != null ? customEnd!.toLocal().toString().split(' ')[0] : ''}',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+              ],
             ),
             SizedBox(height: 16),
             if (totalSpent == 0)
