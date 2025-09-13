@@ -125,6 +125,7 @@ class _MyHomePageState extends State<MyHomePage> {
         _selectedIndex = 2; // Transactions tab
         // Show success dialog after adding expense
         Future.delayed(Duration.zero, () {
+          if (!mounted) return;
           showDialog(
             context: context,
             barrierDismissible: false,
@@ -161,82 +162,166 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   Widget _buildHomeTab() {
-    final crossAxisCount = MediaQuery.of(context).size.width < 400 ? 2 : 3;
-    return Padding(
-      padding: const EdgeInsets.all(12.0),
-      child: Column(
-        children: [
-          Expanded(
-            child: GridView.builder(
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: crossAxisCount,
-                childAspectRatio: 0.95,
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
-              ),
-              itemCount: categories.length,
-              itemBuilder: (context, index) {
-                final category = categories[index];
-                return InkWell(
-                  borderRadius: BorderRadius.circular(16),
-                  onTap: () async {
-                    final result = await Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (context) =>
-                            CategoryPage(selectedCategory: category['name']),
-                      ),
-                    );
-                    if (result is Map<String, dynamic>) {
-                      _addTransaction(result, fromCategoryPage: true);
-                      // Optionally show dialog for repeat entry, but not required for basic add
-                    }
-                  },
-                  child: Card(
-                    elevation: 4,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        vertical: 18.0,
-                        horizontal: 8.0,
-                      ),
-                      child: SingleChildScrollView(
+    final crossAxisCount = MediaQuery.of(context).size.width < 400 ? 3 : 4;
+    // Calculate week and today totals
+    DateTime now = DateTime.now();
+    double todayTotal = transactions
+        .where((tx) {
+          DateTime txDate = _parseDate(tx['date']);
+          return txDate.year == now.year &&
+              txDate.month == now.month &&
+              txDate.day == now.day;
+        })
+        .fold(0.0, (sum, tx) => sum + (tx['amount'] ?? 0.0));
+    DateTime weekStart = now.subtract(Duration(days: now.weekday - 1));
+    double weekTotal = transactions
+        .where((tx) {
+          DateTime txDate = _parseDate(tx['date']);
+          return txDate.isAfter(weekStart.subtract(Duration(days: 1))) &&
+              txDate.isBefore(now.add(Duration(days: 1)));
+        })
+        .fold(0.0, (sum, tx) => sum + (tx['amount'] ?? 0.0));
+
+    return Stack(
+      children: [
+        // Positioned.fill(
+        //   child: Image.asset('assets/beach_bg.jpg', fit: BoxFit.cover),
+        // ),
+        SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(12.0),
+            child: Column(
+              children: [
+                SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Expanded(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white.withAlpha((255 * 0.85).toInt()),
+                          borderRadius: BorderRadius.only(
+                            topLeft: Radius.circular(12),
+                            bottomLeft: Radius.circular(12),
+                          ),
+                        ),
+                        padding: EdgeInsets.symmetric(vertical: 18),
                         child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            CircleAvatar(
-                              radius: 28,
-                              backgroundColor: Theme.of(context)
-                                  .colorScheme
-                                  .primary
-                                  .withAlpha((255 * 0.1).toInt()),
-                              child: Icon(
-                                category['icon'],
-                                size: 32,
-                                color: Theme.of(context).colorScheme.primary,
-                              ),
-                            ),
-                            SizedBox(height: 14),
                             Text(
-                              category['name'],
+                              'Week',
                               style: TextStyle(
-                                fontSize: 15,
+                                fontSize: 18,
                                 fontWeight: FontWeight.w600,
                               ),
-                              textAlign: TextAlign.center,
+                            ),
+                            SizedBox(height: 8),
+                            Text(
+                              '₹ ${weekTotal.toStringAsFixed(2)}',
+                              style: TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ],
                         ),
                       ),
                     ),
+                    Container(width: 2, height: 60, color: Colors.grey[300]),
+                    Expanded(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white.withAlpha((255 * 0.85).toInt()),
+                          borderRadius: BorderRadius.only(
+                            topRight: Radius.circular(12),
+                            bottomRight: Radius.circular(12),
+                          ),
+                        ),
+                        padding: EdgeInsets.symmetric(vertical: 18),
+                        child: Column(
+                          children: [
+                            Text(
+                              'Today',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            SizedBox(height: 8),
+                            Text(
+                              '₹ ${todayTotal.toStringAsFixed(2)}',
+                              style: TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                SizedBox(height: 24),
+                Expanded(
+                  child: GridView.builder(
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: crossAxisCount,
+                      childAspectRatio: 0.95,
+                      crossAxisSpacing: 12,
+                      mainAxisSpacing: 12,
+                    ),
+                    itemCount: categories.length,
+                    itemBuilder: (context, index) {
+                      final category = categories[index];
+                      return InkWell(
+                        borderRadius: BorderRadius.circular(16),
+                        onTap: () async {
+                          final result = await Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => CategoryPage(
+                                selectedCategory: category['name'],
+                              ),
+                            ),
+                          );
+                          if (result is Map<String, dynamic>) {
+                            _addTransaction(result, fromCategoryPage: true);
+                          }
+                        },
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.white.withAlpha((255 * 0.85).toInt()),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                category['icon'],
+                                size: 38,
+                                color: Colors.black,
+                              ),
+                              SizedBox(height: 10),
+                              Text(
+                                category['name'],
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.black,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
                   ),
-                );
-              },
+                ),
+              ],
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -302,109 +387,149 @@ class _MyHomePageState extends State<MyHomePage> {
       }
     });
 
-    return SafeArea(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Spending Summary',
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-            ),
-            SizedBox(height: 12),
-            Row(
+    return Stack(
+      children: [
+        // Positioned.fill(
+        //   child: Image.asset('assets/beach_bg.jpg', fit: BoxFit.cover),
+        // ),
+        SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Filter: ', style: TextStyle(fontSize: 16)),
-                SizedBox(width: 8),
-                DropdownButton<String>(
-                  value: selectedFilter,
-                  items: dateFilters
-                      .map((f) => DropdownMenuItem(value: f, child: Text(f)))
-                      .toList(),
-                  onChanged: (val) async {
-                    if (val == null) return;
-                    if (val == 'Custom') {
-                      final range = await showDateRangePicker(
-                        context: context,
-                        firstDate: DateTime(2000),
-                        lastDate: DateTime(2100),
-                      );
-                      if (range != null) {
-                        setState(() {
-                          selectedFilter = val;
-                          customStart = range.start;
-                          customEnd = range.end;
-                        });
-                      }
-                    } else {
-                      setState(() {
-                        selectedFilter = val;
-                        customStart = null;
-                        customEnd = null;
-                      });
-                    }
-                  },
-                ),
-                if (selectedFilter == 'Custom' &&
-                    customStart != null &&
-                    customEnd != null)
-                  Padding(
-                    padding: const EdgeInsets.only(left: 12.0),
-                    child: Text(
-                      '${customStart != null ? customStart!.toLocal().toString().split(' ')[0] : ''} - ${customEnd != null ? customEnd!.toLocal().toString().split(' ')[0] : ''}',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white.withAlpha((255 * 0.85).toInt()),
+                    borderRadius: BorderRadius.circular(16),
                   ),
-              ],
-            ),
-            SizedBox(height: 16),
-            if (totalSpent == 0)
-              Center(
-                child: Text('No expenses yet', style: TextStyle(fontSize: 16)),
-              )
-            else ...[
-              SizedBox(
-                height: 200,
-                child: PieChart(
-                  PieChartData(
-                    sections: chartSections,
-                    centerSpaceRadius: 40,
-                    sectionsSpace: 2,
-                  ),
-                ),
-              ),
-              SizedBox(height: 24),
-              Text(
-                'Total Spent: ₹${totalSpent.toStringAsFixed(2)}',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-              ),
-              SizedBox(height: 12),
-              ...categoryTotals.entries.map(
-                (e) => Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 2.0),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  padding: EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(e.key, style: TextStyle(fontSize: 15)),
                       Text(
-                        '₹${e.value.toStringAsFixed(2)}',
+                        'Spending Summary',
                         style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w500,
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
+                      SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Text('Filter: ', style: TextStyle(fontSize: 16)),
+                          SizedBox(width: 8),
+                          DropdownButton<String>(
+                            value: selectedFilter,
+                            items: dateFilters
+                                .map(
+                                  (f) => DropdownMenuItem(
+                                    value: f,
+                                    child: Text(f),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: (val) async {
+                              if (val == null) return;
+                              if (val == 'Custom') {
+                                final range = await showDateRangePicker(
+                                  context: context,
+                                  firstDate: DateTime(2000),
+                                  lastDate: DateTime(2100),
+                                );
+                                if (range != null) {
+                                  setState(() {
+                                    selectedFilter = val;
+                                    customStart = range.start;
+                                    customEnd = range.end;
+                                  });
+                                }
+                              } else {
+                                setState(() {
+                                  selectedFilter = val;
+                                  customStart = null;
+                                  customEnd = null;
+                                });
+                              }
+                            },
+                          ),
+                          if (selectedFilter == 'Custom' &&
+                              customStart != null &&
+                              customEnd != null)
+                            Padding(
+                              padding: const EdgeInsets.only(left: 12.0),
+                              child: Text(
+                                '${customStart != null ? customStart!.toLocal().toString().split(' ')[0] : ''} - ${customEnd != null ? customEnd!.toLocal().toString().split(' ')[0] : ''}',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                      SizedBox(height: 16),
+                      if (totalSpent == 0)
+                        Center(
+                          child: Text(
+                            'No expenses yet',
+                            style: TextStyle(fontSize: 16),
+                          ),
+                        )
+                      else ...[
+                        Container(
+                          decoration: BoxDecoration(
+                            color: Colors.white.withAlpha((255 * 0.85).toInt()),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          padding: EdgeInsets.all(8),
+                          child: SizedBox(
+                            height: 200,
+                            child: PieChart(
+                              PieChartData(
+                                sections: chartSections,
+                                centerSpaceRadius: 40,
+                                sectionsSpace: 2,
+                              ),
+                            ),
+                          ),
+                        ),
+                        SizedBox(height: 24),
+                        Text(
+                          'Total Spent: ₹${totalSpent.toStringAsFixed(2)}',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        SizedBox(height: 12),
+                        ...categoryTotals.entries.map(
+                          (e) => Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 2.0),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(e.key, style: TextStyle(fontSize: 15)),
+                                Text(
+                                  '₹${e.value.toStringAsFixed(2)}',
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
-              ),
-            ],
-          ],
+              ],
+            ),
+          ),
         ),
-      ),
+      ],
     );
   }
 
@@ -416,142 +541,216 @@ class _MyHomePageState extends State<MyHomePage> {
       DateTime dateB = _parseDate(b['date']);
       return dateB.compareTo(dateA); // descending
     });
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.all(12.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Transactions',
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-            ),
-            SizedBox(height: 10),
-            Expanded(
-              child: sortedTransactions.isEmpty
-                  ? Center(
-                      child: Text(
-                        'No transactions yet',
-                        style: TextStyle(fontSize: 16),
+    return Stack(
+      children: [
+        // Positioned.fill(
+        //   child: Image.asset('assets/beach_bg.jpg', fit: BoxFit.cover),
+        // ),
+        SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(12.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white.withAlpha((255 * 0.85).toInt()),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  padding: EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Transactions',
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
-                    )
-                  : ListView.separated(
-                      itemCount: sortedTransactions.length,
-                      separatorBuilder: (_, __) => SizedBox(height: 10),
-                      itemBuilder: (context, index) {
-                        final tx = sortedTransactions[index];
-                        return Card(
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(18),
-                          ),
-                          elevation: 3,
-                          color: Theme.of(context).colorScheme.surface,
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              vertical: 16,
-                              horizontal: 18,
-                            ),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                CircleAvatar(
-                                  radius: 22,
-                                  backgroundColor: Theme.of(context)
-                                      .colorScheme
-                                      .primary
-                                      .withAlpha((255 * 0.15).toInt()),
-                                  child: Icon(
-                                    Icons.category,
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.primary,
-                                    size: 26,
-                                  ),
+                      SizedBox(height: 10),
+                      SizedBox(
+                        height: MediaQuery.of(context).size.height * 0.55,
+                        child: sortedTransactions.isEmpty
+                            ? Center(
+                                child: Text(
+                                  'No transactions yet',
+                                  style: TextStyle(fontSize: 16),
                                 ),
-                                SizedBox(width: 14),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        tx['subject'] ?? '',
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.w600,
-                                          fontSize: 16,
-                                        ),
+                              )
+                            : ListView.separated(
+                                itemCount: sortedTransactions.length,
+                                separatorBuilder: (_, __) =>
+                                    SizedBox(height: 10),
+                                itemBuilder: (context, index) {
+                                  final tx = sortedTransactions[index];
+                                  return Container(
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withAlpha(
+                                        (255 * 0.85).toInt(),
                                       ),
-                                      SizedBox(height: 4),
-                                      Text(
-                                        tx['category'] ?? '',
-                                        style: TextStyle(
-                                          fontSize: 14,
-                                          color: Colors.grey[700],
-                                        ),
+                                      borderRadius: BorderRadius.circular(18),
+                                    ),
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 16,
+                                        horizontal: 18,
                                       ),
-                                      SizedBox(height: 2),
-                                      Text(
-                                        tx['date'] ?? '',
-                                        style: TextStyle(
-                                          fontSize: 13,
-                                          color: Colors.grey[600],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                SizedBox(width: 14),
-                                Text(
-                                  '₹${tx['amount'].toStringAsFixed(2)}',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 18,
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.primary,
-                                  ),
-                                ),
-                                SizedBox(width: 8),
-                                IconButton(
-                                  icon: Icon(
-                                    Icons.edit,
-                                    color: Colors.grey[700],
-                                  ),
-                                  tooltip: 'Edit',
-                                  onPressed: () async {
-                                    final updatedTx =
-                                        await Navigator.of(context).push(
-                                          MaterialPageRoute(
-                                            builder: (context) => CategoryPage(
-                                              selectedCategory: tx['category'],
-                                              initialDate: tx['date'],
-                                              initialSubject: tx['subject'],
-                                              initialAmount: tx['amount'],
+                                      child: Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          CircleAvatar(
+                                            radius: 22,
+                                            backgroundColor: Theme.of(context)
+                                                .colorScheme
+                                                .primary
+                                                .withAlpha(
+                                                  (255 * 0.15).toInt(),
+                                                ),
+                                            child: Icon(
+                                              Icons.category,
+                                              color: Theme.of(
+                                                context,
+                                              ).colorScheme.primary,
+                                              size: 26,
                                             ),
                                           ),
-                                        );
-                                    if (updatedTx is Map<String, dynamic>) {
-                                      setState(() {
-                                        transactions[index] = updatedTx;
-                                      });
-                                    }
-                                  },
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
-                    ),
+                                          SizedBox(width: 14),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  tx['subject'] ?? '',
+                                                  style: TextStyle(
+                                                    fontWeight: FontWeight.w600,
+                                                    fontSize: 16,
+                                                  ),
+                                                ),
+                                                SizedBox(height: 4),
+                                                Text(
+                                                  tx['category'] ?? '',
+                                                  style: TextStyle(
+                                                    fontSize: 14,
+                                                    color: Colors.grey[700],
+                                                  ),
+                                                ),
+                                                SizedBox(height: 2),
+                                                Text(
+                                                  tx['date'] ?? '',
+                                                  style: TextStyle(
+                                                    fontSize: 13,
+                                                    color: Colors.grey[600],
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          SizedBox(width: 14),
+                                          Text(
+                                            '₹${tx['amount'].toStringAsFixed(2)}',
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 18,
+                                              color: Theme.of(
+                                                context,
+                                              ).colorScheme.primary,
+                                            ),
+                                          ),
+                                          SizedBox(width: 8),
+                                          IconButton(
+                                            icon: Icon(
+                                              Icons.edit,
+                                              color: Colors.grey[700],
+                                            ),
+                                            tooltip: 'Edit',
+                                            onPressed: () async {
+                                              final updatedTx =
+                                                  await Navigator.of(
+                                                    context,
+                                                  ).push(
+                                                    MaterialPageRoute(
+                                                      builder: (context) =>
+                                                          CategoryPage(
+                                                            selectedCategory:
+                                                                tx['category'],
+                                                            initialDate:
+                                                                tx['date'],
+                                                            initialSubject:
+                                                                tx['subject'],
+                                                            initialAmount:
+                                                                tx['amount'],
+                                                          ),
+                                                    ),
+                                                  );
+                                              if (updatedTx
+                                                  is Map<String, dynamic>) {
+                                                setState(() {
+                                                  transactions[index] =
+                                                      updatedTx;
+                                                });
+                                              }
+                                            },
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
-      ),
+      ],
     );
   }
 
   Widget _buildAccountTab() {
-    return Center(child: Text('My Account', style: TextStyle(fontSize: 24)));
+    return Stack(
+      children: [
+        // Positioned.fill(
+        //   child: Image.asset('assets/beach_bg.jpg', fit: BoxFit.cover),
+        // ),
+        SafeArea(
+          child: Center(
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white.withAlpha((255 * 0.85).toInt()),
+                borderRadius: BorderRadius.circular(18),
+              ),
+              padding: EdgeInsets.symmetric(vertical: 32, horizontal: 32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.account_circle,
+                    size: 64,
+                    color: Colors.deepPurple,
+                  ),
+                  SizedBox(height: 18),
+                  Text(
+                    'My Account',
+                    style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
+                  ),
+                  SizedBox(height: 10),
+                  Text(
+                    'Profile and settings coming soon!',
+                    style: TextStyle(fontSize: 16),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 
   @override
