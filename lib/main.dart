@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'category_page.dart';
 import 'package:fl_chart/fl_chart.dart';
+// Spending tab filter state
 
 void main() {
   runApp(const MyApp());
@@ -67,6 +68,11 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> {
   int _selectedIndex = 0;
+  // Spending tab filter state
+  final List<String> dateFilters = ['All', 'Today', 'This Month', 'Custom'];
+  String selectedFilter = 'All';
+  DateTime? customStart;
+  DateTime? customEnd;
   final List<Map<String, dynamic>> categories = [
     {'name': 'Tax', 'icon': Icons.receipt_long},
     {'name': 'Automobile', 'icon': Icons.directions_car},
@@ -125,16 +131,18 @@ class _MyHomePageState extends State<MyHomePage> {
             builder: (context) {
               return AlertDialog(
                 title: Text('Success'),
-                content: Text('Expense added successfully!'),
+                content: Text(
+                  'Expense added successfully... Do you want to add another expense?',
+                ),
                 actions: [
                   TextButton(
-                    child: Text('Cancel'),
+                    child: Text('No'),
                     onPressed: () {
                       Navigator.of(context).pop();
                     },
                   ),
                   TextButton(
-                    child: Text('OK'),
+                    child: Text('Yes'),
                     onPressed: () {
                       Navigator.of(context).pop();
                       // Go to add new expense (Home tab)
@@ -233,12 +241,6 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   Widget _buildSpendingTab() {
-    // Date filter options
-    final List<String> dateFilters = ['All', 'Today', 'This Month', 'Custom'];
-    String selectedFilter = 'All';
-    DateTime? customStart;
-    DateTime? customEnd;
-
     // Filter transactions by selected date range
     List<Map<String, dynamic>> filteredTx = transactions.where((tx) {
       DateTime txDate = _parseDate(tx['date']);
@@ -320,27 +322,26 @@ class _MyHomePageState extends State<MyHomePage> {
                   items: dateFilters
                       .map((f) => DropdownMenuItem(value: f, child: Text(f)))
                       .toList(),
-                  onChanged: (val) {
+                  onChanged: (val) async {
                     if (val == null) return;
-                    setState(() {
-                      selectedFilter = val;
-                      if (val != 'Custom') {
-                        customStart = null;
-                        customEnd = null;
-                      }
-                    });
                     if (val == 'Custom') {
-                      showDateRangePicker(
+                      final range = await showDateRangePicker(
                         context: context,
                         firstDate: DateTime(2000),
                         lastDate: DateTime(2100),
-                      ).then((range) {
-                        if (range != null) {
-                          setState(() {
-                            customStart = range.start;
-                            customEnd = range.end;
-                          });
-                        }
+                      );
+                      if (range != null) {
+                        setState(() {
+                          selectedFilter = val;
+                          customStart = range.start;
+                          customEnd = range.end;
+                        });
+                      }
+                    } else {
+                      setState(() {
+                        selectedFilter = val;
+                        customStart = null;
+                        customEnd = null;
                       });
                     }
                   },
